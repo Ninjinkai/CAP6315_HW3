@@ -3,91 +3,118 @@ package hw3_5;
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Random;
 
-public class Influence_Modeling {
-	
-	public static String Influence(Double[][] matrix, double p)
-    {
+public class Influence_Modeling
+{	
+//	Run the influence simulation 10 times for each node and report the average
+//	number of nodes activated for each node.
+	public static String cascade(Double[][] matrix, double p)
+	{
 		String output = "";
+		double avg;
 		
+//		Change the adjacency matrix to an activation probability weighted matrix
+//		based on the passed influence parameter p.
 		scalarMultiply(matrix, p);
 		
 		output += "Influence parameter: " + p + "\n";
-		output += printMatrix(matrix) + "\n";
 		
             for(int i = 0; i < matrix.length; i++) {
+            	
             	output += "Starting node: " + (i + 1) + "\n";
-            	double avg = 0;
+            	avg = 0.0;
             	
             	for (int j = 1; j <= 10; j++) {
             		avg += RunSimulation(matrix, i);
             	}
             	
-            	output += "Average number of nodes influenced: " + avg/10.00 +"\n\n";
+            	output += "Average number of nodes activated: " + avg/10.00 +"\n\n";
             }
         return output;
     }
 	
+//	Run an independent cascade model simulation on the network, passed as the matrix
+//	parameter, from the starting node, passed as startnode.
 	public static double RunSimulation(Double[][] matrix, int startnode)
-    {
-        Double[] activenodes = CreateArray(matrix.length);
-        Double[] currentnodes = CreateArray(matrix.length);
-        Double[] currentneighbors;
-        currentnodes[startnode] = 1.00;
-        do {
-            currentneighbors = AddAllNeighbors(matrix, currentnodes, activenodes);
-            Double[][] result = Calculate(matrix,activenodes,currentnodes);
-            currentnodes = result[0];
-            activenodes = result[1];
-
-        }while(CountArray(currentnodes) != 0);
+	{
+//		These arrays list nodes that are already active, nodes that activated this iteration,
+//		and neighboring nodes that may activate next iteration.
+        Double[] activeNodes = zeroArray(matrix.length);
+        Double[] currentNodes = zeroArray(matrix.length);
+        @SuppressWarnings("unused")
+		Double[] currentNeighbors;
         
-        currentneighbors = AddAllNeighbors(matrix, currentnodes, activenodes);
-        return CountArray(activenodes);
+//      Activate the first node in the array of nodes activated this iteration.
+        currentNodes[startnode] = 1.00;
+        
+//      Each iteration will get a set of adjacent inactive nodes to the set of active nodes,
+//      apply the activation probability calculation to that set, then repeat with the newly
+//      activated set of nodes.
+        do {
+            currentNeighbors = addAllNeighbors(matrix, currentNodes, activeNodes);
+            Double[][] result = calculate(matrix, activeNodes, currentNodes);
+            currentNodes = result[0];
+            activeNodes = result[1];
+        } while(sumArray(currentNodes) != 0);
+        
+        currentNeighbors = addAllNeighbors(matrix, currentNodes, activeNodes);
+        return sumArray(activeNodes);
     }
 
-    public static Double[] AddAllNeighbors(Double[][] matrix, Double[] currentnodes, Double[] activenodes)
+//	Create and return an array containing all nodes adjacent to nodes activated in the current iteration.
+    public static Double[] addAllNeighbors(Double[][] matrix, Double[] currentNodes, Double[] activeNodes)
     {
-        Double[] neighbors = CreateArray(matrix.length);
-        for(int i = 0; i < matrix.length; i++)
-        {
-            if(currentnodes[i] > 0)
-            {
-                for(int j = 0; j < matrix.length; j++) if(matrix[i][j] > 0)
-                {
-                    if (currentnodes[j] > 0) neighbors[j] = 0.00;
-                    else if (activenodes[j] > 0) neighbors[j] = 0.00;
-                    else neighbors[j] = 1.00;
+        Double[] neighbors = zeroArray(matrix.length);
+        
+        for(int i = 0; i < matrix.length; i++) {
+            if(currentNodes[i] > 0) {
+                for(int j = 0; j < matrix.length; j++) {
+                	if(matrix[i][j] > 0) {
+                		if (currentNodes[j] > 0) {
+                			neighbors[j] = 0.00;
+                		}
+                        else if (activeNodes[j] > 0) {
+                        	neighbors[j] = 0.00;
+                        }
+                        else {
+                        	neighbors[j] = 1.00;
+                        }
+                	}
                 }
             }
         }
         return neighbors;
     }
 
-    public static Double[] GetNeighbours(Double[][] matrix, int index)
+//  Determine which nodes are activated each time a new set of nodes is activated.
+    public static Double[][] calculate(Double[][] matrix, Double[] activeNodes, Double[] currentNodes)
     {
-        return matrix[index];
-    }
-
-    public static Double[][] Calculate(Double[][] matrix, Double[] activenodes, Double[] currentnodes)
-    {
-        Double[][] result = {CreateArray(matrix.length), CreateArray(matrix.length)};
         Random rand = new Random();
-        Double[] temp = CreateArray(matrix.length);
+        Double[][] result = zeroMatrix(matrix.length);
+        Double[] temp = zeroArray(matrix.length);
+        Double[] neighbors;
 
-        for(int i = 0; i < matrix.length; i++) if (currentnodes[i] > 0) activenodes[i] = currentnodes[i];
+//      Fill active nodes array with nodes that were activated this iteration.
+        for (int i = 0; i < matrix.length; i++) {
+        	if (currentNodes[i] > 0) {
+        		activeNodes[i] = currentNodes[i];
+        	}
+        }
 
+//      For each node activated in this iteration, apply the activation probability
+//      to its neighbors.
         for(int i = 0; i < matrix.length; i++)
         {
-            if(currentnodes[i] > 0)
+            if(currentNodes[i] > 0)
             {
-                Double[] neighbours = GetNeighbours(matrix, i);
+                neighbors = matrix[i];
                 for (int j = 0; j < matrix.length; j++)
                 {
                     double random = rand.nextDouble();
-                    if(neighbours[j] > 0 && activenodes[j] == 0)
+                    if(neighbors[j] > 0 && activeNodes[j] == 0)
                     {
                         if (random < matrix[i][j]) {
                             temp[j] = 1.00;
@@ -96,34 +123,34 @@ public class Influence_Modeling {
                 }
             }
         }
+        
+//      Return the newly activated nodes along with the already activated nodes for this iteration.
         result[0] = temp;
-        result[1] = activenodes;
+        result[1] = activeNodes;
         return result;
     }
 
-    public static Double[] CreateArray(int size)
-    {
-        Double[] array = new Double[size];
-        for(int i = 0; i < size; i++) array[i] = 0.00;
-        return array;
-    }
-
-    public static String DisplayList(Double[] list)
-    {
-        String result = "";
-        for (int i = 0; i < list.length; i++) if(list[i] > 0) result += i + ", ";
-        if (result.length() < 3) return "-";
-        else return result.substring(0, result.length() - 2);
-    }
-
-    public static int CountArray(Double[] array)
+//  Sum the values inside an array.
+    public static int sumArray(Double[] array)
     {
         int result = 0;
-        for (int i = 0; i < array.length; i++) result += array[i];
+        for (int i = 0; i < array.length; i++) {
+        	result += array[i];
+        }
         return result;
     }
     
- // return a zeroed m-by-n matrix
+//  Create and return a zeroed n-sized array.
+    public static Double[] zeroArray(int n)
+    {
+        Double[] array = new Double[n];
+        for(int i = 0; i < n; i++) {
+        	array[i] = 0.00;
+        }
+        return array;
+    }
+    
+//  Create and return a zeroed n-by-n matrix.
     public static Double[][] zeroMatrix(int n)
     {
         Double[][] C = new Double[n][n];
@@ -135,6 +162,8 @@ public class Influence_Modeling {
         return C;
     }
     
+//  Read a .csv file generated by Gephi.  This is set for the karate network with
+//  34 nodes, source and target only.  The file karate_edges.csv must match the path in the FileReader.
     public static Double[][] readCSV()
     {
     	Double[][] C = zeroMatrix(34);
@@ -144,21 +173,17 @@ public class Influence_Modeling {
     	int t;
 
     	try {
-
-    		br = new BufferedReader(new FileReader("src/hw3_5/karate_edges.csv"));
+    		br = new BufferedReader(new FileReader("src/rsc/karate_edges.csv"));
+    		
     		while ((lineStr = br.readLine()) != null) {
-
     			String[] edge = lineStr.split(",");
     			if (!edge[0].equalsIgnoreCase("Source")) {
-    				
     				s = (int) Double.parseDouble(edge[0]) - 1;
     				t = (int) Double.parseDouble(edge[1]) - 1;
     				C[s][t] = 1.00;
     				C[t][s] = 1.00;
     			}
-
     		}
-
     	} catch (FileNotFoundException e) {
     		e.printStackTrace();
     	} catch (IOException e) {
@@ -172,12 +197,12 @@ public class Influence_Modeling {
     			}
     		}
     	}
-    	
     	return C;
     }
     
-//	Print the adjacency matrix to a string
-    public static String printMatrix(Double[][] matrix) {
+//	Print the adjacency matrix to a string.
+    public static String printMatrix(Double[][] matrix)
+    {
         String output = "";
     	for (int i = 0; i < matrix.length; i++) {
         	for (int j = 0; j < matrix[i].length; j++) {
@@ -188,7 +213,7 @@ public class Influence_Modeling {
     	return output;
     }
     
-//  Multiply a matrix by a scalar
+//  Multiply a matrix by a scalar.
     public static void scalarMultiply(Double[][] matrix, double p)
     {
     	for (int i = 0; i < matrix.length; i++) {
@@ -198,15 +223,23 @@ public class Influence_Modeling {
         }
     }
 
-	public static void main(String[] args) {
-
-		Double[][] matrix = readCSV();
-		double p;
-		
-//		p = 0.05;
-//		p = 0.20;
-		p = 0.40;
-		System.out.println(Influence(matrix, p));
+	public static void main(String[] args)
+	{
+		try {
+			FileWriter writer = new FileWriter("output.txt");
+			
+//			Run the independent cascade model simulation for different influence parameters.
+//			Print output to the text file.
+			writer.append(printMatrix(readCSV()));
+			writer.append(cascade(readCSV(), 0.05));
+			writer.append(cascade(readCSV(), 0.20));
+			writer.append(cascade(readCSV(), 0.40));
+			
+			writer.flush();
+			writer.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 }
